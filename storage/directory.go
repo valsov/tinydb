@@ -1,13 +1,13 @@
 package storage
 
 // file that keeps track of location of relations ->
-//  - tableX/indexY => fileABC
+//  - tableX/indexY => fileABC + root page offset
 //  - pageIdXXX => fileABC + offset
 // in memory -> hashmap
-// todo: store pages free space summary somehow
+// todo: store pages free space summary somehow -> free space map
 
 type PageDirectory struct {
-	FileMap map[string]string     // Relation to file map
+	FileMap map[string]FileOffset // Relation to file and root page map
 	PageMap map[uint32]FileOffset // Page id to file offset
 }
 

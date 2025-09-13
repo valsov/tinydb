@@ -1,10 +1,14 @@
 package buffer
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/tinydb/storage"
+)
 
 type BufferPage struct {
-	Dirty        bool
-	PermanentPin bool // For schema and root pages
-	PinCount     uint32
-	Latch        *sync.RWMutex
+	dirty    bool
+	pinCount uint32
+	latch    *sync.RWMutex
+	page     *storage.RawPage
 }
