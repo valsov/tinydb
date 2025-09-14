@@ -5,12 +5,19 @@ import (
 )
 
 var (
-	ErrLayoutNotFound = errors.New("layout not found")
-	ErrFieldNotFound  = errors.New("field not found")
+	ErrLayoutNotFound   = errors.New("layout not found")
+	ErrFieldNotFound    = errors.New("field not found")
+	ErrUnknownFieldType = errors.New("unknown field type")
 )
 
 type LayoutManager struct {
 	tables map[string]Layout
+}
+
+func NewLayoutManager() *LayoutManager {
+	return &LayoutManager{
+		tables: map[string]Layout{},
+	}
 }
 
 func (l *LayoutManager) GetLayout(table string) (Layout, error) {
@@ -30,9 +37,78 @@ type Layout struct {
 	Fields []Field
 }
 
-func NewLayout(fields []Field) Layout {
-	// todo: calculate private fields
-	panic("todo")
+// Rules:
+// - null bitsets at the beginning
+// - bool fields packed into byte,
+// - variable fields are represented as fixed size values first: by offset and size
+//   - variable part is stored at the end, pointed to by offset in fixed size part
+func NewLayout(fields []Field) (Layout, error) {
+	layout := Layout{
+		Fields: make([]Field, len(fields)),
+	}
+	if len(fields) == 0 {
+		return layout, nil
+	}
+
+	// Null bitsets management
+	var bitsetOffset uint16
+	var bitsetIndex uint8
+	for i, field := range fields {
+		if field.Nullable {
+			field.nullOffset = bitsetOffset
+			field.nullIndex = bitsetIndex
+
+			if bitsetIndex == 7 {
+				// Reached capacity, use another bitset
+				bitsetOffset++
+				bitsetIndex = 0
+			} else {
+				bitsetIndex++
+			}
+		}
+		layout.Fields[i] = field
+	}
+
+	// Set offsets
+	var offset uint16
+	if bitsetIndex == 0 {
+		offset = bitsetOffset
+	} else {
+		offset = bitsetOffset + 1
+	}
+
+	bitsetOffset = 0
+	bitsetIndex = 0
+	for i, field := range layout.Fields {
+		info, found := TypesInfoMap[field.Type]
+		if !found {
+			return Layout{}, ErrUnknownFieldType
+		}
+
+		if info.Packable {
+			if bitsetOffset == 0 && i != 0 {
+				// Create new bitmap
+				bitsetOffset = offset
+				offset++
+			}
+			field.offset = bitsetOffset
+			field.packIndex = bitsetIndex
+			if bitsetIndex == 7 {
+				// Reached capacity, next packed data will use another bitset
+				bitsetOffset = 0
+				bitsetIndex = 0
+			} else {
+				bitsetIndex++
+			}
+		} else {
+			field.offset = offset
+			offset += info.Size
+		}
+
+		layout.Fields[i] = field
+	}
+
+	return layout, nil
 }
 
 func (l *Layout) GetField(name string) (Field, error) {
@@ -45,37 +121,12 @@ func (l *Layout) GetField(name string) (Field, error) {
 }
 
 type Field struct {
-	Name       string
-	Type       FieldType
+	Name     string
+	Type     FieldType
+	Nullable bool
+
 	offset     uint16
-	nullOffset uint16 // Where to find null info storing byte
-	nullIndex  uint8  // At which position to look in the null info byte
-	// not needed? => fieldLayoutIndex uint8  // Store position in layout for fast subsequent lookup
-}
-
-func (l *Field) IsNull(buffer []byte) (bool, error) {
-	nullBitset, err := ReadByte(buffer, l.nullOffset)
-	if err != nil {
-		return false, err
-	}
-	return (nullBitset & (1 << l.nullIndex)) != 0, nil
-}
-
-func (l *Field) SetIsNull(isNull bool, buffer []byte) error {
-	nullBitset, err := ReadByte(buffer, l.nullOffset)
-	if err != nil {
-		return err
-	}
-
-	if isNull {
-		if (nullBitset & (1 << l.nullIndex)) != 0 {
-			// Unset bit
-			nullBitset ^= 1 << l.nullIndex
-		}
-	} else {
-		// Set bit
-		nullBitset |= 1 << l.nullIndex
-	}
-
-	return WriteByte(nullBitset, buffer, l.nullOffset)
+	packIndex  uint8  // In the case of packed value, identifies the bit index to look at
+	nullOffset uint16 // Where to find null info storing bitset
+	nullIndex  uint8  // At which position to look in the null info bitset
 }
