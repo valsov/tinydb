@@ -34,7 +34,8 @@ func (l *LayoutManager) SetLayout(table string, layout Layout) error {
 }
 
 type Layout struct {
-	Fields []Field
+	Fields               []Field
+	VarLengthFieldsIndex []int // Fast lookup for variable length fields to compute such fields value update repercussions
 }
 
 // Rules:
@@ -53,7 +54,12 @@ func NewLayout(fields []Field) (Layout, error) {
 	// Null bitsets management
 	var bitsetOffset uint16
 	var bitsetIndex uint8
-	for i, field := range fields {
+	for i, f := range fields {
+		field := Field{
+			Name:     f.Name,
+			Type:     f.Type,
+			Nullable: f.Nullable,
+		}
 		if field.Nullable {
 			field.nullOffset = bitsetOffset
 			field.nullIndex = bitsetIndex
@@ -101,6 +107,10 @@ func NewLayout(fields []Field) (Layout, error) {
 				bitsetIndex++
 			}
 		} else {
+			if info.VariableLength {
+				layout.VarLengthFieldsIndex = append(layout.VarLengthFieldsIndex, i)
+			}
+
 			field.offset = offset
 			offset += info.Size
 		}
