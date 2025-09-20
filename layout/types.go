@@ -14,7 +14,7 @@ const (
 	Int64Type   FieldType = "int64"
 	Float32Type FieldType = "float32"
 	Float64Type FieldType = "float64"
-	StringType  FieldType = "string"
+	//StringType  FieldType = "string"
 )
 
 var (
@@ -40,10 +40,10 @@ var (
 		Float64Type: {
 			Size: 8,
 		},
-		StringType: {
-			Size:           10, // Offset (uint16) + length (uint64) -> 2 + 8 = 10
+		/*StringType: {
+			Size:           4, // Offset (uint16) + length (uint16)
 			VariableLength: true,
-		},
+		},*/
 	}
 )
 

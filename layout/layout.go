@@ -8,6 +8,8 @@ var (
 	ErrLayoutNotFound   = errors.New("layout not found")
 	ErrFieldNotFound    = errors.New("field not found")
 	ErrUnknownFieldType = errors.New("unknown field type")
+	ErrWrongFieldType   = errors.New("wrong field type")
+	ErrNotNullable      = errors.New("cannot set field null status since it isn't nullable")
 )
 
 type LayoutManager struct {
@@ -34,13 +36,12 @@ func (l *LayoutManager) SetLayout(table string, layout Layout) error {
 }
 
 type Layout struct {
-	Fields               []Field
-	VarLengthFieldsIndex []int // Fast lookup for variable length fields to compute such fields value update repercussions
+	Fields []Field
 }
 
 // Rules:
 // - null bitsets at the beginning
-// - bool fields packed into byte,
+// - bool fields packed into byte
 // - variable fields are represented as fixed size values first: by offset and size
 //   - variable part is stored at the end, pointed to by offset in fixed size part
 func NewLayout(fields []Field) (Layout, error) {
@@ -90,6 +91,9 @@ func NewLayout(fields []Field) (Layout, error) {
 		if !found {
 			return Layout{}, ErrUnknownFieldType
 		}
+		if info.VariableLength {
+			return Layout{}, errors.New("variable length fields are not yet implemented")
+		}
 
 		if info.Packable {
 			if bitsetOffset == 0 && i != 0 {
@@ -99,6 +103,7 @@ func NewLayout(fields []Field) (Layout, error) {
 			}
 			field.offset = bitsetOffset
 			field.packIndex = bitsetIndex
+			field.packed = true
 			if bitsetIndex == 7 {
 				// Reached capacity, next packed data will use another bitset
 				bitsetOffset = 0
@@ -107,10 +112,6 @@ func NewLayout(fields []Field) (Layout, error) {
 				bitsetIndex++
 			}
 		} else {
-			if info.VariableLength {
-				layout.VarLengthFieldsIndex = append(layout.VarLengthFieldsIndex, i)
-			}
-
 			field.offset = offset
 			offset += info.Size
 		}
@@ -136,7 +137,119 @@ type Field struct {
 	Nullable bool
 
 	offset     uint16
+	packed     bool
 	packIndex  uint8  // In the case of packed value, identifies the bit index to look at
 	nullOffset uint16 // Where to find null info storing bitset
 	nullIndex  uint8  // At which position to look in the null info bitset
 }
+
+func (f Field) IsNull(buffer []byte) (bool, error) {
+	if !f.Nullable {
+		return false, nil
+	}
+	return BitIsSet(f.nullOffset, f.nullIndex, buffer)
+}
+
+func (f Field) SetIsNull(isNull bool, buffer []byte) error {
+	if !f.Nullable {
+		return ErrNotNullable
+	}
+	return WriteBit(isNull, f.nullOffset, f.nullIndex, buffer)
+}
+
+func (f Field) Read(buffer []byte) (any, error) {
+	isNull, err := f.IsNull(buffer)
+	if err != nil {
+		return nil, err
+	}
+	if isNull {
+		return nil, nil
+	}
+
+	if f.packed {
+		return BitIsSet(f.offset, f.packIndex, buffer)
+	}
+
+	switch f.Type {
+	case Int8Type:
+		b, err := ReadByte(buffer, f.offset)
+		if err != nil {
+			return nil, err
+		}
+		return int8(b), nil
+	case Int16Type:
+		return ReadInt16(buffer, f.offset)
+	case Int32Type:
+		return ReadInt32(buffer, f.offset)
+	case Int64Type:
+		return ReadInt64(buffer, f.offset)
+	case Float32Type:
+		return ReadFloat32(buffer, f.offset)
+	case Float64Type:
+		return ReadFloat64(buffer, f.offset)
+	//case StringType:
+	//	return f.readString(buffer)
+	default:
+		return nil, ErrUnknownFieldType
+	}
+}
+
+func (f Field) Write(value any, buffer []byte) error {
+	if f.packed {
+		typedBool, ok := value.(bool)
+		if !ok {
+			return ErrWrongFieldType
+		}
+		return WriteBit(typedBool, f.offset, f.packIndex, buffer)
+	}
+
+	switch typedVal := value.(type) {
+	case int8:
+		return WriteByte(byte(typedVal), buffer, f.offset)
+	case int16:
+		return WriteInt16(typedVal, buffer, f.offset)
+	case int32:
+		return WriteInt32(typedVal, buffer, f.offset)
+	case int64:
+		return WriteInt64(typedVal, buffer, f.offset)
+	case float32:
+		return WriteFloat32(typedVal, buffer, f.offset)
+	case float64:
+		return WriteFloat64(typedVal, buffer, f.offset)
+	//case string:
+	//	return f.writeString(typedVal, buffer)
+	default:
+		return ErrUnknownFieldType
+	}
+}
+
+/*
+func (f Field) readString(buffer []byte) (string, error) {
+	offset, err := ReadInt16(buffer, f.offset)
+	if err != nil {
+		return "", err
+	}
+	strOffset := uint16(offset)
+
+	length, err := ReadInt16(buffer, f.offset+2)
+	if err != nil {
+		return "", err
+	}
+	strLen := uint16(length)
+
+	bytes, err := ReadBytes(buffer, strOffset, strLen)
+	if err != nil {
+		return "", err
+	}
+
+	return string(bytes), nil
+}
+
+// Variable length field write assumes there is enough space to fit value;
+// it also assumes, in the case of a length increase that other variable length fields
+// after it are at the correct offset to fit new field.
+// Whole tuple move in case of legnth increase should be done prior to this operation.
+func (f Field) writeString(value string, buffer []byte) error {
+
+}
+*/
