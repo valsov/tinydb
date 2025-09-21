@@ -10,10 +10,10 @@ var (
 type Manager struct {
 }
 
-func (s *Manager) GetPage(relation string, pageId uint32) (*Page, error) {
+func (s *Manager) GetPage(pageId PageId) (*Page, error) {
 	panic("todo")
 }
 
-func (s *Manager) WritePage(page *Page, relation string) error {
+func (s *Manager) WritePage(page *Page) error {
 	panic("todo")
 }

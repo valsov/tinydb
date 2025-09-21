@@ -1,6 +1,10 @@
 package storage
 
-import "github.com/tinydb/data"
+import (
+	"fmt"
+
+	"github.com/tinydb/data"
+)
 
 const (
 	PageSize = 4096
@@ -17,8 +21,17 @@ const (
 // improve by allowing overflow pages
 // free space management (between cells)
 
+type PageId struct {
+	Id       uint32
+	Relation string
+}
+
+func (p PageId) String() string {
+	return fmt.Sprintf("%s:%d", p.Relation, p.Id)
+}
+
 type Page struct {
-	PageId uint32
+	Id     PageId
 	Header PageHeader
 	Data   [PageSize]byte
 }
@@ -90,7 +103,6 @@ type Slot struct {
 }
 
 type Cell struct {
-	PageId     uint32
 	SlotOffset uint16
 	Header     CellHeader
 }

@@ -15,25 +15,25 @@ var (
 )
 
 type LayoutManager struct {
-	tables map[string]Layout
+	relations map[string]Layout
 }
 
 func NewLayoutManager() *LayoutManager {
 	return &LayoutManager{
-		tables: map[string]Layout{},
+		relations: map[string]Layout{},
 	}
 }
 
-func (l *LayoutManager) GetLayout(table string) (Layout, error) {
-	layout, found := l.tables[table]
+func (l *LayoutManager) GetLayout(relation string) (Layout, error) {
+	layout, found := l.relations[relation]
 	if !found {
 		return Layout{}, ErrLayoutNotFound
 	}
 	return layout, nil
 }
 
-func (l *LayoutManager) SetLayout(table string, layout Layout) error {
-	l.tables[table] = layout
+func (l *LayoutManager) SetLayout(relation string, layout Layout) error {
+	l.relations[relation] = layout
 	return nil
 }
 

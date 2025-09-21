@@ -8,7 +8,7 @@ package storage
 
 type PageDirectory struct {
 	FileMap map[string]FileOffset // Relation to file and root page map
-	PageMap map[uint32]FileOffset // Page id to file offset
+	PageMap map[PageId]FileOffset // Page id to file offset
 }
 
 type FileOffset struct {
