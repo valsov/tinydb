@@ -31,59 +31,86 @@ func (p PageId) String() string {
 }
 
 type Page struct {
-	Id     PageId
-	Header PageHeader
-	Data   [PageSize]byte
+	Id       PageId
+	Location PhysLoc
+	Header   PageHeader
+	Data     []byte
 }
 
 func (p *Page) LoadPageHeader() error {
-	sBytes := p.Data[:]
 	offset := uint16(0)
-	pageType, err := data.ReadByte(sBytes, offset)
+	pageType, err := data.ReadByte(p.Data, offset)
 	if err != nil {
 		return err
 	}
 	offset++
 
-	slotsCount, err := data.ReadInt16(sBytes, offset)
+	slotsCount, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
 	offset += 2
 
-	freeSpace, err := data.ReadInt16(sBytes, offset)
+	freeSpace, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
 	offset += 2
 
-	slotsEndOffset, err := data.ReadInt16(sBytes, offset)
+	slotsEndOffset, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
 	offset += 2
 
-	cellsEndOffset, err := data.ReadInt16(sBytes, offset)
+	cellsEndOffset, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
 
 	p.Header = PageHeader{
 		PageType:       pageType,
-		SlotsCount:     uint16(slotsCount),
-		FreeSpace:      uint16(freeSpace),
-		SlotsEndOffset: uint16(slotsEndOffset),
-		CellsEndOffset: uint16(cellsEndOffset),
+		SlotsCount:     slotsCount,
+		FreeSpace:      freeSpace,
+		SlotsEndOffset: slotsEndOffset,
+		CellsEndOffset: cellsEndOffset,
 	}
 	return nil
 }
 
 func (p *Page) ReadSlot(offset uint16) (Slot, error) {
-	panic("todo")
+	deletedByte, err := data.ReadByte(p.Data, offset)
+	if err != nil {
+		return Slot{}, err
+	}
+
+	deleted := (deletedByte & 1) != 0
+	if deleted {
+		return Slot{
+			Deleted: true,
+		}, nil
+	}
+
+	cellOffset, err := data.ReadUint16(p.Data, offset)
+	if err != nil {
+		return Slot{}, err
+	}
+	return Slot{
+		Deleted:    false,
+		CellOffset: cellOffset,
+	}, nil
 }
 
 func (p *Page) ReadCell(offset uint16) (Cell, error) {
-	panic("todo")
+	size, err := data.ReadUint16(p.Data, offset)
+	if err != nil {
+		return Cell{}, err
+	}
+	return Cell{
+		Header: CellHeader{
+			Size: size,
+		},
+	}, nil
 }
 
 type PageHeader struct {
@@ -108,5 +135,5 @@ type Cell struct {
 }
 
 type CellHeader struct {
-	Size uint32
+	Size uint16
 }

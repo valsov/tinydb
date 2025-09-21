@@ -8,7 +8,7 @@ import (
 
 type BufferPage struct {
 	dirty    bool
-	pinCount uint32
+	pinCount int
 	latch    *sync.RWMutex
 	page     *storage.Page
 }

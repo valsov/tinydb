@@ -149,7 +149,7 @@ func (f Field) IsNull(buffer []byte) (bool, error) {
 	if !f.Nullable {
 		return false, nil
 	}
-	return data.BitIsSet(f.nullOffset, f.nullIndex, buffer)
+	return data.IsBitSet(f.nullOffset, f.nullIndex, buffer)
 }
 
 func (f Field) SetIsNull(isNull bool, buffer []byte) error {
@@ -169,7 +169,7 @@ func (f Field) Read(buffer []byte) (any, error) {
 	}
 
 	if f.packed {
-		return data.BitIsSet(f.offset, f.packIndex, buffer)
+		return data.IsBitSet(f.offset, f.packIndex, buffer)
 	}
 
 	switch f.Type {

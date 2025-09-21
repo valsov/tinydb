@@ -25,6 +25,21 @@ func WriteByte(value byte, buffer []byte, offset uint16) error {
 	return nil
 }
 
+func ReadUint16(buffer []byte, offset uint16) (uint16, error) {
+	if int(offset)+1 >= len(buffer) {
+		return 0, ErrOutOfBounds
+	}
+	return binary.BigEndian.Uint16(buffer[offset : offset+2]), nil
+}
+
+func WriteUint16(value uint16, buffer []byte, offset uint16) error {
+	if int(offset)+1 >= len(buffer) {
+		return ErrOutOfBounds
+	}
+	binary.BigEndian.PutUint16(buffer[offset:offset+2], value)
+	return nil
+}
+
 func ReadInt16(buffer []byte, offset uint16) (int16, error) {
 	if int(offset)+1 >= len(buffer) {
 		return 0, ErrOutOfBounds
