@@ -1,5 +1,7 @@
 package storage
 
+import "github.com/tinydb/data"
+
 const (
 	PageSize = 4096
 )
@@ -15,15 +17,60 @@ const (
 // improve by allowing overflow pages
 // free space management (between cells)
 
-type RawPage struct {
+type Page struct {
 	PageId uint32
+	Header PageHeader
 	Data   [PageSize]byte
 }
 
-type SlottedPage struct {
-	PageId uint32
-	Header PageHeader
-	Slots  []Slot
+func (p *Page) LoadPageHeader() error {
+	sBytes := p.Data[:]
+	offset := uint16(0)
+	pageType, err := data.ReadByte(sBytes, offset)
+	if err != nil {
+		return err
+	}
+	offset++
+
+	slotsCount, err := data.ReadInt16(sBytes, offset)
+	if err != nil {
+		return err
+	}
+	offset += 2
+
+	freeSpace, err := data.ReadInt16(sBytes, offset)
+	if err != nil {
+		return err
+	}
+	offset += 2
+
+	slotsEndOffset, err := data.ReadInt16(sBytes, offset)
+	if err != nil {
+		return err
+	}
+	offset += 2
+
+	cellsEndOffset, err := data.ReadInt16(sBytes, offset)
+	if err != nil {
+		return err
+	}
+
+	p.Header = PageHeader{
+		PageType:       pageType,
+		SlotsCount:     uint16(slotsCount),
+		FreeSpace:      uint16(freeSpace),
+		SlotsEndOffset: uint16(slotsEndOffset),
+		CellsEndOffset: uint16(cellsEndOffset),
+	}
+	return nil
+}
+
+func (p *Page) ReadSlot(offset uint16) (Slot, error) {
+	panic("todo")
+}
+
+func (p *Page) ReadCell(offset uint16) (Cell, error) {
+	panic("todo")
 }
 
 type PageHeader struct {
@@ -43,17 +90,11 @@ type Slot struct {
 }
 
 type Cell struct {
-	PageId    uint32
-	SlotIndex uint32
-	Header    CellHeader
-	Data      []byte
+	PageId     uint32
+	SlotOffset uint16
+	Header     CellHeader
 }
 
 type CellHeader struct {
 	Size uint32
-}
-
-type ValueCellHeader struct {
-	Size       uint32
-	NullBitset []byte
 }

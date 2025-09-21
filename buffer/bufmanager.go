@@ -14,18 +14,18 @@ var (
 type Manager struct {
 }
 
-func (m *Manager) RequestPageRead(relation string, pageId uint32) (*storage.RawPage, error) {
+func (m *Manager) RequestPageRead(relation string, pageId uint32) (*storage.Page, error) {
 	panic("todo")
 }
 
-func (m *Manager) RequestPageWrite(relation string, pageId uint32) (*storage.RawPage, error) {
+func (m *Manager) RequestPageWrite(relation string, pageId uint32) (*storage.Page, error) {
 	panic("todo")
 }
 
-func (m *Manager) SetDirty(page *storage.RawPage) error {
+func (m *Manager) SetDirty(page *storage.Page) error {
 	panic("todo")
 }
 
-func (m *Manager) ReleasePage(page *storage.RawPage) error {
+func (m *Manager) ReleasePage(page *storage.Page) error {
 	panic("todo")
 }

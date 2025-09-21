@@ -1,4 +1,4 @@
-package layout
+package data
 
 func BitIsSet(offset uint16, index uint8, buffer []byte) (bool, error) {
 	bitset, err := ReadByte(buffer, offset)

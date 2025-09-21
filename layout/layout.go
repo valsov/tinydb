@@ -2,6 +2,8 @@ package layout
 
 import (
 	"errors"
+
+	"github.com/tinydb/data"
 )
 
 var (
@@ -147,14 +149,14 @@ func (f Field) IsNull(buffer []byte) (bool, error) {
 	if !f.Nullable {
 		return false, nil
 	}
-	return BitIsSet(f.nullOffset, f.nullIndex, buffer)
+	return data.BitIsSet(f.nullOffset, f.nullIndex, buffer)
 }
 
 func (f Field) SetIsNull(isNull bool, buffer []byte) error {
 	if !f.Nullable {
 		return ErrNotNullable
 	}
-	return WriteBit(isNull, f.nullOffset, f.nullIndex, buffer)
+	return data.WriteBit(isNull, f.nullOffset, f.nullIndex, buffer)
 }
 
 func (f Field) Read(buffer []byte) (any, error) {
@@ -167,26 +169,26 @@ func (f Field) Read(buffer []byte) (any, error) {
 	}
 
 	if f.packed {
-		return BitIsSet(f.offset, f.packIndex, buffer)
+		return data.BitIsSet(f.offset, f.packIndex, buffer)
 	}
 
 	switch f.Type {
 	case Int8Type:
-		b, err := ReadByte(buffer, f.offset)
+		b, err := data.ReadByte(buffer, f.offset)
 		if err != nil {
 			return nil, err
 		}
 		return int8(b), nil
 	case Int16Type:
-		return ReadInt16(buffer, f.offset)
+		return data.ReadInt16(buffer, f.offset)
 	case Int32Type:
-		return ReadInt32(buffer, f.offset)
+		return data.ReadInt32(buffer, f.offset)
 	case Int64Type:
-		return ReadInt64(buffer, f.offset)
+		return data.ReadInt64(buffer, f.offset)
 	case Float32Type:
-		return ReadFloat32(buffer, f.offset)
+		return data.ReadFloat32(buffer, f.offset)
 	case Float64Type:
-		return ReadFloat64(buffer, f.offset)
+		return data.ReadFloat64(buffer, f.offset)
 	//case StringType:
 	//	return f.readString(buffer)
 	default:
@@ -200,22 +202,22 @@ func (f Field) Write(value any, buffer []byte) error {
 		if !ok {
 			return ErrWrongFieldType
 		}
-		return WriteBit(typedBool, f.offset, f.packIndex, buffer)
+		return data.WriteBit(typedBool, f.offset, f.packIndex, buffer)
 	}
 
 	switch typedVal := value.(type) {
 	case int8:
-		return WriteByte(byte(typedVal), buffer, f.offset)
+		return data.WriteByte(byte(typedVal), buffer, f.offset)
 	case int16:
-		return WriteInt16(typedVal, buffer, f.offset)
+		return data.WriteInt16(typedVal, buffer, f.offset)
 	case int32:
-		return WriteInt32(typedVal, buffer, f.offset)
+		return data.WriteInt32(typedVal, buffer, f.offset)
 	case int64:
-		return WriteInt64(typedVal, buffer, f.offset)
+		return data.WriteInt64(typedVal, buffer, f.offset)
 	case float32:
-		return WriteFloat32(typedVal, buffer, f.offset)
+		return data.WriteFloat32(typedVal, buffer, f.offset)
 	case float64:
-		return WriteFloat64(typedVal, buffer, f.offset)
+		return data.WriteFloat64(typedVal, buffer, f.offset)
 	//case string:
 	//	return f.writeString(typedVal, buffer)
 	default:

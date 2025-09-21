@@ -10,5 +10,5 @@ type BufferPage struct {
 	dirty    bool
 	pinCount uint32
 	latch    *sync.RWMutex
-	page     *storage.RawPage
+	page     *storage.Page
 }
