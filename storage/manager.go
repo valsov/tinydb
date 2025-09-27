@@ -2,15 +2,20 @@ package storage
 
 import (
 	"errors"
+	"fmt"
 	"os"
+	"path"
 	"sync"
 )
 
+const (
+	filePermissions = 0o740 // rwx r-- ---
+)
+
 var (
-	ErrPageNotFound        = errors.New("page not found")
 	ErrIncompletePageRead  = errors.New("unexpected page read bytes count")
-	ErrWriteFailed         = errors.New("page write failed")
 	ErrIncompletePageWrite = errors.New("unexpected page write bytes count")
+	ErrFileAlreadyExists   = errors.New("file already exists")
 )
 
 type fileWrapper struct {
@@ -19,18 +24,19 @@ type fileWrapper struct {
 }
 
 type Manager struct {
-	pageDir *PageDirectory
 	handles map[string]*fileWrapper
 	mutex   *sync.Mutex
 }
 
-func (m *Manager) GetPage(pageId PageId) (*Page, error) {
-	loc, err := m.pageDir.GetPageLoc(pageId)
-	if err != nil {
-		return nil, err
+func NewStorageManager() *Manager {
+	return &Manager{
+		handles: map[string]*fileWrapper{},
+		mutex:   &sync.Mutex{},
 	}
+}
 
-	file, err := m.getFileHandle(loc.File)
+func (m *Manager) GetPage(pageId PageId, location PhysLoc) (*Page, error) {
+	file, err := m.getFileHandle(location.File)
 	if err != nil {
 		return nil, err
 	}
@@ -39,7 +45,7 @@ func (m *Manager) GetPage(pageId PageId) (*Page, error) {
 	defer file.mutex.RUnlock()
 
 	buffer := make([]byte, PageSize)
-	readCount, err := file.ReadAt(buffer, int64(loc.Offset))
+	readCount, err := file.ReadAt(buffer, int64(location.Offset))
 	if err != nil {
 		return nil, err
 	}
@@ -47,12 +53,9 @@ func (m *Manager) GetPage(pageId PageId) (*Page, error) {
 		return nil, ErrIncompletePageRead
 	}
 	return &Page{
-		Id: pageId,
-		Location: PhysLoc{
-			File:   loc.File,
-			Offset: loc.Offset,
-		},
-		Data: buffer,
+		Id:       pageId,
+		Location: location,
+		Data:     buffer,
 	}, nil
 }
 
@@ -76,16 +79,49 @@ func (m *Manager) WritePage(page *Page) error {
 	return file.Sync()
 }
 
-func (m *Manager) getFileHandle(name string) (*fileWrapper, error) {
+func (m *Manager) CreateFile(fpath string) error {
+	m.mutex.Lock()
+	if _, found := m.handles[fpath]; found {
+		m.mutex.Unlock()
+		return ErrFileAlreadyExists
+	}
+
+	dirs := path.Dir(fpath)
+	if dirs != "." && dirs != "/" {
+		err := os.MkdirAll(dirs, os.ModePerm)
+		if err != nil {
+			return fmt.Errorf("directories creation err: %w", err)
+		}
+	}
+
+	fhandle, err := os.OpenFile(fpath, os.O_RDWR|os.O_CREATE|os.O_EXCL, filePermissions)
+	if err != nil {
+		m.mutex.Unlock()
+		if os.IsNotExist(err) {
+			return ErrFileAlreadyExists
+		}
+		return err
+	}
+
+	file := &fileWrapper{
+		File:  fhandle,
+		mutex: &sync.RWMutex{},
+	}
+	m.handles[fpath] = file
+	m.mutex.Unlock()
+	return nil
+}
+
+func (m *Manager) getFileHandle(path string) (*fileWrapper, error) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	file, found := m.handles[name]
+	file, found := m.handles[path]
 	if found {
 		return file, nil
 	}
 
-	fhandle, err := os.OpenFile(name, os.O_RDWR, 0)
+	fhandle, err := os.OpenFile(path, os.O_RDWR, filePermissions)
 	if err != nil {
 		return nil, err
 	}
@@ -94,6 +130,6 @@ func (m *Manager) getFileHandle(name string) (*fileWrapper, error) {
 		File:  fhandle,
 		mutex: &sync.RWMutex{},
 	}
-	m.handles[name] = file
+	m.handles[path] = file
 	return file, nil
 }

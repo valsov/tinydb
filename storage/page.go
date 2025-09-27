@@ -17,10 +17,6 @@ const (
 	PageTypeValues
 )
 
-// todo: after mvp:
-// improve by allowing overflow pages
-// free space management (between cells)
-
 type PageId struct {
 	Id       uint32
 	Relation string
@@ -78,6 +74,7 @@ func (p *Page) LoadPageHeader() error {
 	return nil
 }
 
+// todo: write methods
 func (p *Page) ReadSlot(offset uint16) (Slot, error) {
 	deletedByte, err := data.ReadByte(p.Data, offset)
 	if err != nil {
