@@ -81,8 +81,9 @@ func (m *Manager) WritePage(page *Page) error {
 
 func (m *Manager) CreateFile(fpath string) error {
 	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
 	if _, found := m.handles[fpath]; found {
-		m.mutex.Unlock()
 		return ErrFileAlreadyExists
 	}
 
@@ -90,13 +91,12 @@ func (m *Manager) CreateFile(fpath string) error {
 	if dirs != "." && dirs != "/" {
 		err := os.MkdirAll(dirs, os.ModePerm)
 		if err != nil {
-			return fmt.Errorf("directories creation err: %w", err)
+			return fmt.Errorf("directories creation failed: %w", err)
 		}
 	}
 
 	fhandle, err := os.OpenFile(fpath, os.O_RDWR|os.O_CREATE|os.O_EXCL, filePermissions)
 	if err != nil {
-		m.mutex.Unlock()
 		if os.IsNotExist(err) {
 			return ErrFileAlreadyExists
 		}
@@ -108,7 +108,32 @@ func (m *Manager) CreateFile(fpath string) error {
 		mutex: &sync.RWMutex{},
 	}
 	m.handles[fpath] = file
-	m.mutex.Unlock()
+	return nil
+}
+
+func (m *Manager) DeleteFile(fpath string) error {
+	m.mutex.Lock()
+	defer m.mutex.Unlock()
+
+	if file, found := m.handles[fpath]; found {
+		file.mutex.Lock()
+		defer file.mutex.Unlock()
+
+		if err := file.Close(); err != nil {
+			return fmt.Errorf("failed to close file handle: %w", err)
+		}
+
+		if err := os.Remove(fpath); err != nil {
+			return fmt.Errorf("failed to delete file: %w", err)
+		}
+
+		delete(m.handles, fpath)
+		return nil
+	}
+
+	if err := os.Remove(fpath); err != nil {
+		return fmt.Errorf("failed to delete file: %w", err)
+	}
 	return nil
 }
 
