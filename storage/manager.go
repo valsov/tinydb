@@ -97,7 +97,7 @@ func (m *Manager) CreateFile(fpath string) error {
 
 	fhandle, err := os.OpenFile(fpath, os.O_RDWR|os.O_CREATE|os.O_EXCL, filePermissions)
 	if err != nil {
-		if os.IsNotExist(err) {
+		if errors.Is(err, os.ErrExist) {
 			return ErrFileAlreadyExists
 		}
 		return err
