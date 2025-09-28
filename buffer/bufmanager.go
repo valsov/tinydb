@@ -97,32 +97,34 @@ func (m *Manager) tryEvict() (bool, error) {
 	candidate := m.leastRecent
 	var prev *BufferPage
 	for candidate != nil {
-		if candidate.pinCount == 0 {
-			// Evict
-			candidate.Latch.Lock()
-			defer candidate.Latch.Unlock()
-
-			if candidate.dirty {
-				err := m.store.WritePage(candidate.Page)
-				if err != nil {
-					return false, fmt.Errorf("dirty page write for eviction failed: %w", err)
-				}
-			}
-
-			// It is assumed that prev is only nil if page == m.mostRecent
-			delete(m.pages, candidate.Page.Id)
-			if m.leastRecent == candidate {
-				m.leastRecent = candidate.moreRecent
-			} else if m.mostRecent == candidate {
-				prev.moreRecent = nil
-				m.mostRecent = prev
-			} else {
-				prev.moreRecent = candidate.moreRecent
-			}
-			return true, nil
+		if candidate.pinCount != 0 {
+			prev = candidate
+			candidate = candidate.moreRecent
+			continue
 		}
-		prev = candidate
-		candidate = candidate.moreRecent
+
+		// Evict
+		candidate.Latch.Lock()
+		defer candidate.Latch.Unlock()
+
+		if candidate.dirty {
+			err := m.store.WritePage(candidate.Page)
+			if err != nil {
+				return false, fmt.Errorf("dirty page write for eviction failed: %w", err)
+			}
+		}
+
+		// It is assumed that prev is only nil if page == m.mostRecent
+		delete(m.pages, candidate.Page.Id)
+		if m.leastRecent == candidate {
+			m.leastRecent = candidate.moreRecent
+		} else if m.mostRecent == candidate {
+			prev.moreRecent = nil
+			m.mostRecent = prev
+		} else {
+			prev.moreRecent = candidate.moreRecent
+		}
+		return true, nil
 	}
 
 	return false, nil
