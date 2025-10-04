@@ -39,26 +39,26 @@ func (p *Page) LoadPageHeader() error {
 	if err != nil {
 		return err
 	}
-	offset++
 
+	offset++
 	slotsCount, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
-	offset += 2
 
+	offset += 2
 	freeSpace, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
-	offset += 2
 
+	offset += 2
 	slotsEndOffset, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
 	}
-	offset += 2
 
+	offset += 2
 	cellsEndOffset, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return err
@@ -74,7 +74,35 @@ func (p *Page) LoadPageHeader() error {
 	return nil
 }
 
-// todo: write methods
+func (p *Page) WritePageHeader() error {
+	offset := uint16(0)
+	if err := data.WriteByte(p.Header.PageType, p.Data, offset); err != nil {
+		return err
+	}
+
+	offset++
+	if err := data.WriteUint16(p.Header.SlotsCount, p.Data, offset); err != nil {
+		return err
+	}
+
+	offset += 2
+	if err := data.WriteUint16(p.Header.FreeSpace, p.Data, offset); err != nil {
+		return err
+	}
+
+	offset += 2
+	if err := data.WriteUint16(p.Header.SlotsEndOffset, p.Data, offset); err != nil {
+		return err
+	}
+
+	offset += 2
+	if err := data.WriteUint16(p.Header.CellsEndOffset, p.Data, offset); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (p *Page) ReadSlot(offset uint16) (Slot, error) {
 	deletedByte, err := data.ReadByte(p.Data, offset)
 	if err != nil {
@@ -88,6 +116,7 @@ func (p *Page) ReadSlot(offset uint16) (Slot, error) {
 		}, nil
 	}
 
+	offset++
 	cellOffset, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return Slot{}, err
@@ -96,6 +125,28 @@ func (p *Page) ReadSlot(offset uint16) (Slot, error) {
 		Deleted:    false,
 		CellOffset: cellOffset,
 	}, nil
+}
+
+func (p *Page) WriteSlot(slot Slot, offset uint16) (uint16, error) {
+	deletedByte := byte(0)
+	if slot.Deleted {
+		deletedByte = 1
+	}
+	if err := data.WriteByte(deletedByte, p.Data, offset); err != nil {
+		return 0, err
+	}
+
+	offset++
+	if err := data.WriteUint16(slot.CellOffset, p.Data, offset); err != nil {
+		return 0, err
+	}
+
+	// Return slot end offset
+	return offset + 2, nil
+}
+
+func (p *Page) SetSlotDeleted(offset uint16) error {
+	return data.WriteByte(1, p.Data, offset)
 }
 
 func (p *Page) ReadCell(offset uint16) (Cell, error) {
@@ -108,6 +159,15 @@ func (p *Page) ReadCell(offset uint16) (Cell, error) {
 			Size: size,
 		},
 	}, nil
+}
+
+func (p *Page) WriteCell(cell Cell, offset uint16) (uint16, error) {
+	if err := data.WriteUint16(cell.Header.Size, p.Data, offset); err != nil {
+		return 0, nil
+	}
+
+	// Return cell end offset
+	return offset + 2, nil
 }
 
 type PageHeader struct {
