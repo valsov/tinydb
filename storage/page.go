@@ -150,24 +150,48 @@ func (p *Page) SetSlotDeleted(offset uint16) error {
 }
 
 func (p *Page) ReadCell(offset uint16) (Cell, error) {
+	slotIndex, err := data.ReadUint16(p.Data, offset)
+	if err != nil {
+		return Cell{}, err
+	}
+
+	offset += 2
+	cellOffset, err := data.ReadUint16(p.Data, offset)
+	if err != nil {
+		return Cell{}, err
+	}
+
+	offset += 2
 	size, err := data.ReadUint16(p.Data, offset)
 	if err != nil {
 		return Cell{}, err
 	}
 	return Cell{
-		Header: CellHeader{
-			Size: size,
+		Id: TupleId{
+			SlotIndex: slotIndex,
+			Offset:    cellOffset,
 		},
+		Size: size,
 	}, nil
 }
 
-func (p *Page) WriteCell(cell Cell, offset uint16) (uint16, error) {
-	if err := data.WriteUint16(cell.Header.Size, p.Data, offset); err != nil {
-		return 0, nil
+func (p *Page) WriteCell(cell Cell, offset uint16) error {
+	if err := data.WriteUint16(cell.Id.SlotIndex, p.Data, offset); err != nil {
+		return err
+	}
+
+	offset += 2
+	if err := data.WriteUint16(cell.Id.Offset, p.Data, offset); err != nil {
+		return err
+	}
+
+	offset += 2
+	if err := data.WriteUint16(cell.Size, p.Data, offset); err != nil {
+		return err
 	}
 
 	// Return cell end offset
-	return offset + 2, nil
+	return nil
 }
 
 type PageHeader struct {
@@ -187,10 +211,11 @@ type Slot struct {
 }
 
 type Cell struct {
-	SlotOffset uint16
-	Header     CellHeader
+	Id   TupleId
+	Size uint16
 }
 
-type CellHeader struct {
-	Size uint16
+type TupleId struct {
+	SlotIndex uint16
+	Offset    uint16
 }
