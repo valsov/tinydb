@@ -1,4 +1,4 @@
-package layout
+package catalog
 
 import (
 	"errors"
@@ -7,35 +7,11 @@ import (
 )
 
 var (
-	ErrLayoutNotFound   = errors.New("layout not found")
 	ErrFieldNotFound    = errors.New("field not found")
 	ErrUnknownFieldType = errors.New("unknown field type")
 	ErrWrongFieldType   = errors.New("wrong field type")
 	ErrNotNullable      = errors.New("cannot set field null status since it isn't nullable")
 )
-
-type LayoutManager struct {
-	relations map[string]Layout
-}
-
-func NewLayoutManager() *LayoutManager {
-	return &LayoutManager{
-		relations: map[string]Layout{},
-	}
-}
-
-func (l *LayoutManager) GetLayout(relation string) (Layout, error) {
-	layout, found := l.relations[relation]
-	if !found {
-		return Layout{}, ErrLayoutNotFound
-	}
-	return layout, nil
-}
-
-func (l *LayoutManager) SetLayout(relation string, layout Layout) error {
-	l.relations[relation] = layout
-	return nil
-}
 
 type Layout struct {
 	Fields []Field
@@ -43,7 +19,7 @@ type Layout struct {
 
 // Rules:
 // - null bitsets at the beginning
-// - bool fields packed into byte
+// - bool fields packed into byte, can be packed along with nullable info bits
 // - variable fields are represented as fixed size values first: by offset and size
 //   - variable part is stored at the end, pointed to by offset in fixed size part
 func NewLayout(fields []Field) (Layout, error) {
@@ -86,8 +62,7 @@ func NewLayout(fields []Field) (Layout, error) {
 		offset = bitsetOffset + 1
 	}
 
-	bitsetOffset = 0
-	bitsetIndex = 0
+	newBitsetRequired := false
 	for i, field := range layout.Fields {
 		info, found := TypesInfoMap[field.Type]
 		if !found {
@@ -98,18 +73,19 @@ func NewLayout(fields []Field) (Layout, error) {
 		}
 
 		if info.Packable {
-			if bitsetOffset == 0 && i != 0 {
-				// Create new bitmap
+			if newBitsetRequired {
+				// Create new bitset
 				bitsetOffset = offset
+				bitsetIndex = 0
 				offset++
+				newBitsetRequired = false
 			}
 			field.offset = bitsetOffset
 			field.packIndex = bitsetIndex
 			field.packed = true
 			if bitsetIndex == 7 {
 				// Reached capacity, next packed data will use another bitset
-				bitsetOffset = 0
-				bitsetIndex = 0
+				newBitsetRequired = true
 			} else {
 				bitsetIndex++
 			}

@@ -1,4 +1,4 @@
-package layout
+package catalog
 
 const (
 	BoolType    FieldType = "bool"
