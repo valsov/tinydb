@@ -7,7 +7,9 @@ import (
 )
 
 const (
-	PageSize = 4096
+	PageSize         = 4096
+	SlotsStartOffset = 9 // After page header
+	SlotSize         = 5
 )
 
 const (
@@ -24,6 +26,32 @@ type PageId struct {
 
 func (p PageId) String() string {
 	return fmt.Sprintf("%s:%d", p.Relation, p.Id)
+}
+
+type PageHeader struct {
+	PageType uint8 // Flags
+
+	SlotsCount uint16
+	FreeSpace  uint16
+
+	SlotsEndOffset uint16
+	CellsEndOffset uint16
+}
+
+type Slot struct {
+	Index      uint16
+	Deleted    bool
+	CellOffset uint16
+}
+
+type Cell struct {
+	Id   TupleId
+	Size uint16
+}
+
+type TupleId struct {
+	SlotIndex uint16
+	Offset    uint16
 }
 
 type Page struct {
@@ -190,32 +218,5 @@ func (p *Page) WriteCell(cell Cell, offset uint16) error {
 		return err
 	}
 
-	// Return cell end offset
 	return nil
-}
-
-type PageHeader struct {
-	PageType uint8 // Flags
-
-	SlotsCount uint16
-	FreeSpace  uint16
-
-	SlotsEndOffset uint16
-	CellsEndOffset uint16
-}
-
-type Slot struct {
-	Index      uint16
-	Deleted    bool
-	CellOffset uint16
-}
-
-type Cell struct {
-	Id   TupleId
-	Size uint16
-}
-
-type TupleId struct {
-	SlotIndex uint16
-	Offset    uint16
 }

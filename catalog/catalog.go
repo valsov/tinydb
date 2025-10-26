@@ -12,7 +12,7 @@ type RelationData struct {
 	// constraints
 }
 
-// Catalog is the storage of relations layout and index info
+// Catalog is the storage of relations layout and index info.
 type Catalog struct {
 	relations map[string]RelationData
 }

@@ -23,6 +23,7 @@ type relationDirectory struct {
 	pageMap map[uint32]uint32 // Page id to file offset
 }
 
+// PageDirectory keeps track of files and offsets within them for each relation.
 type PageDirectory struct {
 	relationMap map[string]relationDirectory // Relation to file and a set of pages
 	rootPath    string
