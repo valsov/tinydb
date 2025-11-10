@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"errors"
+	"time"
 
 	"github.com/tinydb/data"
 )
@@ -17,11 +18,12 @@ type Layout struct {
 	Fields []Field
 }
 
-// Rules:
-// - null bitsets at the beginning
-// - bool fields packed into byte, can be packed along with nullable info bits
-// - variable fields are represented as fixed size values first: by offset and size
-//   - variable part is stored at the end, pointed to by offset in fixed size part
+// Layout rules:
+//  1. All null bitsets are placed at the beginning.
+//  2. Boolean fields are packed into byte, they can be packed along with nullable info bits.
+//  3. Variable fields are represented with fixed size values first: metadata.
+//     They are stored at the end to allow fast lookup for offset management.
+//     Variable section of variable fields are stored after all fixed size items, pointed to by offset and length in metadata.
 func NewLayout(fields []Field) (Layout, error) {
 	layout := Layout{
 		Fields: make([]Field, len(fields)),
@@ -63,13 +65,26 @@ func NewLayout(fields []Field) (Layout, error) {
 	}
 
 	newBitsetRequired := false
+	varLenFields := []struct {
+		field Field
+		size  uint16
+	}{}
 	for i, field := range layout.Fields {
 		info, found := TypesInfoMap[field.Type]
 		if !found {
 			return Layout{}, ErrUnknownFieldType
 		}
+
 		if info.VariableLength {
-			return Layout{}, errors.New("variable length fields are not yet implemented")
+			// Store for special processing
+			varLenFields = append(varLenFields, struct {
+				field Field
+				size  uint16
+			}{
+				field: field,
+				size:  info.Size,
+			})
+			continue
 		}
 
 		if info.Packable {
@@ -95,6 +110,13 @@ func NewLayout(fields []Field) (Layout, error) {
 		}
 
 		layout.Fields[i] = field
+	}
+
+	// Put all variable length metadata fields at the end, their variable length value will be stored after those
+	for i, varLenField := range varLenFields {
+		varLenField.field.offset = offset
+		layout.Fields[i] = varLenField.field
+		offset += varLenField.size
 	}
 
 	return layout, nil
@@ -125,14 +147,14 @@ func (f Field) IsNull(buffer []byte) (bool, error) {
 	if !f.Nullable {
 		return false, nil
 	}
-	return data.IsBitSet(f.nullOffset, f.nullIndex, buffer)
+	return data.IsBitSet(buffer, f.nullOffset, f.nullIndex)
 }
 
 func (f Field) SetIsNull(isNull bool, buffer []byte) error {
 	if !f.Nullable {
 		return ErrNotNullable
 	}
-	return data.WriteBit(isNull, f.nullOffset, f.nullIndex, buffer)
+	return data.WriteBit(isNull, buffer, f.nullOffset, f.nullIndex)
 }
 
 func (f Field) Read(buffer []byte) (any, error) {
@@ -145,7 +167,7 @@ func (f Field) Read(buffer []byte) (any, error) {
 	}
 
 	if f.packed {
-		return data.IsBitSet(f.offset, f.packIndex, buffer)
+		return data.IsBitSet(buffer, f.offset, f.packIndex)
 	}
 
 	switch f.Type {
@@ -165,8 +187,14 @@ func (f Field) Read(buffer []byte) (any, error) {
 		return data.ReadFloat32(buffer, f.offset)
 	case Float64Type:
 		return data.ReadFloat64(buffer, f.offset)
-	//case StringType:
-	//	return f.readString(buffer)
+	case DatetimeType:
+		unixEpoch, err := data.ReadInt64(buffer, f.offset)
+		if err != nil {
+			return nil, err
+		}
+		return time.Unix(unixEpoch, 0), nil
+	case StringType:
+		return readString(buffer, f.offset)
 	default:
 		return nil, ErrUnknownFieldType
 	}
@@ -178,7 +206,7 @@ func (f Field) Write(value any, buffer []byte) error {
 		if !ok {
 			return ErrWrongFieldType
 		}
-		return data.WriteBit(typedBool, f.offset, f.packIndex, buffer)
+		return data.WriteBit(typedBool, buffer, f.offset, f.packIndex)
 	}
 
 	switch typedVal := value.(type) {
@@ -194,40 +222,11 @@ func (f Field) Write(value any, buffer []byte) error {
 		return data.WriteFloat32(typedVal, buffer, f.offset)
 	case float64:
 		return data.WriteFloat64(typedVal, buffer, f.offset)
-	//case string:
-	//	return f.writeString(typedVal, buffer)
+	case time.Time:
+		return data.WriteInt64(typedVal.Unix(), buffer, f.offset)
+	case WriteStringData:
+		return writeString(typedVal, buffer, f)
 	default:
 		return ErrUnknownFieldType
 	}
 }
-
-/*
-func (f Field) readString(buffer []byte) (string, error) {
-	offset, err := ReadInt16(buffer, f.offset)
-	if err != nil {
-		return "", err
-	}
-	strOffset := uint16(offset)
-
-	length, err := ReadInt16(buffer, f.offset+2)
-	if err != nil {
-		return "", err
-	}
-	strLen := uint16(length)
-
-	bytes, err := ReadBytes(buffer, strOffset, strLen)
-	if err != nil {
-		return "", err
-	}
-
-	return string(bytes), nil
-}
-
-// Variable length field write assumes there is enough space to fit value;
-// it also assumes, in the case of a length increase that other variable length fields
-// after it are at the correct offset to fit new field.
-// Whole tuple move in case of legnth increase should be done prior to this operation.
-func (f Field) writeString(value string, buffer []byte) error {
-
-}
-*/

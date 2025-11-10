@@ -1,6 +1,6 @@
 package data
 
-func IsBitSet(offset uint16, index uint8, buffer []byte) (bool, error) {
+func IsBitSet(buffer []byte, offset uint16, index uint8) (bool, error) {
 	bitset, err := ReadByte(buffer, offset)
 	if err != nil {
 		return false, err
@@ -8,7 +8,7 @@ func IsBitSet(offset uint16, index uint8, buffer []byte) (bool, error) {
 	return (bitset & (1 << index)) != 0, nil
 }
 
-func WriteBit(isSet bool, offset uint16, index uint8, buffer []byte) error {
+func WriteBit(isSet bool, buffer []byte, offset uint16, index uint8) error {
 	bitset, err := ReadByte(buffer, offset)
 	if err != nil {
 		return err

@@ -1,14 +1,15 @@
 package catalog
 
 const (
-	BoolType    FieldType = "bool"
-	Int8Type    FieldType = "int8"
-	Int16Type   FieldType = "int16"
-	Int32Type   FieldType = "int32"
-	Int64Type   FieldType = "int64"
-	Float32Type FieldType = "float32"
-	Float64Type FieldType = "float64"
-	//StringType  FieldType = "string"
+	BoolType     FieldType = "bool"
+	Int8Type     FieldType = "int8"
+	Int16Type    FieldType = "int16"
+	Int32Type    FieldType = "int32"
+	Int64Type    FieldType = "int64"
+	Float32Type  FieldType = "float32"
+	Float64Type  FieldType = "float64"
+	DatetimeType FieldType = "datetime"
+	StringType   FieldType = "string"
 )
 
 var (
@@ -34,10 +35,15 @@ var (
 		Float64Type: {
 			Size: 8,
 		},
-		/*StringType: {
-			Size:           4, // Offset (uint16) + length (uint16)
+		DatetimeType: {
+			Size: 8, // Unix epoch (int64)
+		},
+		StringType: {
+			// Page data metadata: data offset (uint16) + data length in current page (uint16) +
+			// Overflow metadata: overflow page id (uint32) + total data length (uint32) + overflow page slot index (uint16)
+			Size:           14,
 			VariableLength: true,
-		},*/
+		},
 	}
 )
 
